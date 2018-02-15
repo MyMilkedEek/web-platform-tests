@@ -105,16 +105,27 @@ class Firefox(Browser):
 
     def get_from_nightly(self, pattern):
         index = self.latest_nightly_listing()
-        filename = re.compile(pattern).search(index.text).group(1)
+        regexp = re.compile(pattern)
+        max_version = None
+        for match in regexp.finditer(index.text):
+            try:
+                version = int(match.group(2))
+            except ValueError:
+                continue
+            if max_version is None or version > max_version[0]:
+                max_version = (version, match.group(1))
+        if not max_version:
+            raise ValueError("Failed to find version to download")
+        logger.info("Downloading Firefox %s" % max_version[0])
         return get("https://archive.mozilla.org/pub/firefox/nightly/latest-mozilla-central/%s" %
-                   filename)
+                   max_version[1])
 
     def install(self, dest=None):
         """Install Firefox."""
         if dest is None:
             dest = os.getcwd()
 
-        resp = self.get_from_nightly("<a[^>]*>(firefox-\d+\.\d(?:\w\d)?.en-US.%s\.tar\.bz2)" % self.platform_string())
+        resp = self.get_from_nightly("<a[^>]*>(firefox-(\d+)\.\d(?:\w\d)?.en-US.%s\.tar\.bz2)" % self.platform_string())
         untar(resp.raw, dest=dest)
         return find_executable("firefox", os.path.join(dest, "firefox"))
 
